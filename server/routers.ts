@@ -1,5 +1,7 @@
+import { z } from "zod";
 import { COOKIE_NAME } from "../shared/const.js";
 import { getSessionCookieOptions } from "./_core/cookies";
+import { invokeLLM } from "./_core/llm";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
 
@@ -17,12 +19,28 @@ export const appRouter = router({
     }),
   }),
 
-  // TODO: add feature routers here, e.g.
-  // todo: router({
-  //   list: protectedProcedure.query(({ ctx }) =>
-  //     db.getUserTodos(ctx.user.id)
-  //   ),
-  // }),
+  ai: router({
+    generate: publicProcedure
+      .input(
+        z.object({
+          messages: z.array(
+            z.object({
+              role: z.enum(["user", "assistant", "system"]),
+              content: z.string(),
+            }),
+          ),
+        }),
+      )
+      .mutation(async ({ input }) => {
+        const response = await invokeLLM({
+          messages: input.messages,
+        });
+        const firstChoice = response.choices?.[0];
+        const content = firstChoice?.message?.content;
+        const textContent = typeof content === "string" ? content : Array.isArray(content) ? content.map((c: any) => (c.type === "text" ? c.text : "")).join("") : "";
+        return { content: textContent };
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;
