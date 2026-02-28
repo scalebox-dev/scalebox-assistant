@@ -14,6 +14,8 @@ const CATEGORIES: PromptCategory[] = [
   "role_play",
   "architecture",
   "pricing_roi",
+  "competitive",
+  "agent_scenarios",
 ];
 
 export default function HomeScreen() {
@@ -45,7 +47,7 @@ export default function HomeScreen() {
 
         {/* Stats Row */}
         <View style={styles.statsRow}>
-          <StatCard label="提示词模板" value="50+" color={colors.primary} colors={colors} />
+          <StatCard label="提示词模板" value="35+" color={colors.primary} colors={colors} />
           <StatCard label="已保存收藏" value={String(favorites.length)} color="#00D4AA" colors={colors} />
           <StatCard label="使用历史" value={String(history.length)} color="#F59E0B" colors={colors} />
         </View>

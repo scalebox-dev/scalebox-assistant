@@ -38,6 +38,7 @@ const MAPPING = {
   "envelope.fill": "email",
   "person.2.fill": "group",
   "chart.bar.fill": "bar-chart",
+  "chart.bar.xaxis": "leaderboard",
   "sparkles": "auto-awesome",
   "star.fill": "star",
   "star": "star-border",

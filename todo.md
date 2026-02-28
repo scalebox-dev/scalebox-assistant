@@ -16,3 +16,11 @@
 - [x] Connect AI Generator to backend LLM (server/routers.ts ai.generate)
 - [x] Generate app icon and configure branding
 - [x] Final polish and animations
+
+## v1.1 新增内容（来自第二份附件）
+- [x] 产品信息页：新增技术特性详解（microVM、Code Interpreter SDK、Browser/Computer Use）
+- [x] 产品信息页：新增竞品对比模块（ScaleBox vs E2B 优劣势分析）
+- [x] 产品信息页：新增目标客户分类（AI 智能体、行业 ISV、企业客户）
+- [x] 提示词库：新增竞品对比类提示词（ScaleBox vs E2B）
+- [x] 提示词库：新增 AI 智能体场景提示词（Code Interpreter、Browser Use、Agent 训练）
+- [x] 提示词库：新增注册引导和试用转化提示词（$100 代金券）

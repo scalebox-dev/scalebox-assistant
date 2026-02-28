@@ -33,6 +33,8 @@ const CATEGORIES: PromptCategory[] = [
   "role_play",
   "architecture",
   "pricing_roi",
+  "competitive",
+  "agent_scenarios",
 ];
 
 export default function LibraryScreen() {

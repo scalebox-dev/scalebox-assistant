@@ -4,7 +4,9 @@ export type PromptCategory =
   | "email_templates"
   | "role_play"
   | "architecture"
-  | "pricing_roi";
+  | "pricing_roi"
+  | "competitive"
+  | "agent_scenarios";
 
 export interface PromptTemplate {
   id: string;
@@ -54,6 +56,18 @@ export const CATEGORY_INFO: Record<
     description: "定价策略、ROI 计算和成本对比分析",
     color: "#8B5CF6",
     icon: "chart.bar.fill",
+  },
+  competitive: {
+    label: "竞品对比",
+    description: "ScaleBox vs E2B 等竞品的对比分析与应对策略",
+    color: "#EF4444",
+    icon: "chart.bar.xaxis",
+  },
+  agent_scenarios: {
+    label: "Agent 场景",
+    description: "AI 智能体应用场景的深度销售话术",
+    color: "#00D4AA",
+    icon: "wand.and.stars",
   },
 };
 
@@ -339,8 +353,99 @@ export const PROMPTS: PromptTemplate[] = [
       "请生成一份 ScaleBox vs 自建沙盒方案的成本对比白皮书，面向 [公司名称] 的决策层。\n\n客户当前方案：[当前方案]\n团队规模：[团队规模]\n\n白皮书应包含：\n1. 自建方案的完整成本分析（硬件、运维、人力、机会成本）\n2. ScaleBox 的全成本（订阅费 + 用量费）\n3. 3 年 TCO 对比\n4. 非量化价值（安全、合规、开发效率）\n5. 迁移成本和时间\n6. 结论和建议\n\n用专业的商业语言，包含图表描述和数据支撑。",
     variables: ["公司名称", "当前方案", "团队规模"],
   },
+  // ===== 竞品对比 =====
+  {
+    id: "comp_001",
+    category: "competitive",
+    title: "ScaleBox vs E2B 全面对比",
+    description: "生成面向客户的 ScaleBox vs E2B 对比分析报告",
+    template:
+      "请帮我生成一份面向 [客户公司] 的 ScaleBox vs E2B 对比分析报告。\n\n客户场景：[业务场景]\n客户关注点：[关注点]\n\n报告内容：\n1. 核心架构对比（microVM vs 容器）\n2. 启动速度对比（并附预热池策略说明）\n3. GPU 支持和复杂网络配置能力\n4. 长会话稳定性对比\n5. 环境定制化能力（Dockerfile + 业务模板）\n6. Agent 训练和轨迹合成支持\n7. 定价模型对比\n8. 针对 [客户公司] 场景的最终建议\n\n语调客观专业，突出 ScaleBox 在该客户场景下的差异化价值。",
+    variables: ["客户公司", "业务场景", "关注点"],
+  },
+  {
+    id: "comp_002",
+    category: "competitive",
+    title: "处理客户提到 E2B 的应对话术",
+    description: "当客户表示已在考虑 E2B 时的应对策略",
+    template:
+      "客户 [客户公司] 的 [职位] 表示他们正在评估 E2B。客户主要关注点是 [关注点]。\n\n请帮我设计一套应对话术：\n1. 承认 E2B 在当前场景下的优势（实诚建立信任）\n2. 引导客户思考长期业务增长后的需求（GPU、定制化、并发规模）\n3. 提出 ScaleBox 的差异化价值主张\n4. 建议并行测试的策略\n5. 关键问题和标准回答\n\n语调要自信不卸进，避免贡低竞争对手。",
+    variables: ["客户公司", "职位", "关注点"],
+  },
+  {
+    id: "comp_003",
+    category: "competitive",
+    title: "GPU 场景差异化话术",
+    description: "针对需要 GPU 支持的客户的差异化销售话术",
+    template:
+      "客户 [客户公司] 需要在沙盒中运行 [具体场景]，涉及 GPU 计算或复杂网络配置。\n\n请生成一份针对性的销售话术：\n1. 明确指出 E2B 目前不支持 GPU 和复杂网络配置的局限性\n2. 说明 ScaleBox 基于 microVM 架构如何实现硬件级访问\n3. 具体展示 [具体场景] 的技术实现方案\n4. 性能和成本对比\n5. 迁移路径和支持资源\n\n语言要技术准确，面向技术决策者。",
+    variables: ["客户公司", "具体场景"],
+  },
+  {
+    id: "comp_004",
+    category: "competitive",
+    title: "预热池策略应对启动速度质疑",
+    description: "当客户对 ScaleBox 启动速度质疑时的应对方案",
+    template:
+      "客户对 ScaleBox 的 500ms-1s 启动时间表示关注，认为 E2B 的 150ms 更适合他们的实时对话场景。\n客户业务：[业务描述]\n\n请帮我设计应对方案：\n1. 承认延迟差异的存在，并说明实际用户体感\n2. 介绍预热池策略（保持 5-10% 沙盒预热）如何将延迟降至可接受范围\n3. 强调其他维度的差异化价值（GPU、定制化、长会话等）\n4. 讨论客户具体业务中启动速度的真实重要性\n5. 提出并行测试方案\n\n语调要实诚、自信，避免过度承诺。",
+    variables: ["业务描述"],
+  },
+  // ===== Agent 场景 =====
+  {
+    id: "agent_001",
+    category: "agent_scenarios",
+    title: "Code Interpreter 集成销售话术",
+    description: "针对需要为 LLM 集成代码解释器的客户",
+    template:
+      "客户 [客户公司] 正在构建基于 [模型名称] 的 AI 应用，需要为其集成代码执行能力。\n\n请帮我设计针对该客户的 Code Interpreter 销售方案：\n1. 说明 ScaleBox Code Interpreter SDK 的核心价值（几行代码集成、实时流式输出）\n2. 展示 Python/Node.js SDK 的具体使用示例\n3. 数据可视化自动处理能力展示\n4. 安全隔离对 AI 生成代码的重要性\n5. 与 [客户公司] 具体业务的结合点\n6. 集成复杂度和时间成本估算\n\n语调要技术准确，面向开发者和架构师。",
+    variables: ["客户公司", "模型名称"],
+  },
+  {
+    id: "agent_002",
+    category: "agent_scenarios",
+    title: "Browser Use / Computer Use 场景销售",
+    description: "针对需要 AI 浏览器自动化或桌面控制的客户",
+    template:
+      "客户 [客户公司] 正在构建 [具体场景]，需要 AI 能够操作浏览器或桌面软件。\n\n请帮我设计针对性销售方案：\n1. 说明 ScaleBox Browser Use （Playwright）和 Computer Use 的技术能力\n2. 展示具体应用场景（网页爬虫、表单自动化、数据采集等）\n3. 安全隔离对浏览器自动化的重要性\n4. 与 [具体场景] 的技术实现路径\n5. 性能和成本对比（相比自建方案）\n\n语调要具体实用，包含代码示例和技术细节。",
+    variables: ["客户公司", "具体场景"],
+  },
+  {
+    id: "agent_003",
+    category: "agent_scenarios",
+    title: "Agent 训练和轨迹合成销售方案",
+    description: "针对需要构建或优化 AI Agent 的客户",
+    template:
+      "客户 [客户公司] 正在开发 [类型] AI Agent，需要构建训练数据和优化执行轨迹。\n\n请帮我设计针对性销售方案：\n1. 说明 ScaleBox 如何支持 Agent 训练场景（沙盒模拟、轨迹合成 TNR）\n2. 展示人工干预强化学习（RLHF）的具体实现\n3. 说明如何对 Agent 执行轨迹进行编辑和干预\n4. 安全隔离对模型训练的重要性\n5. 与 [客户公司] 具体 Agent 类型的结合点\n6. 训练效率和成本估算\n\n语调要展现技术深度，面向 AI 研究员和模型训练团队。",
+    variables: ["客户公司", "类型"],
+  },
+  {
+    id: "agent_004",
+    category: "agent_scenarios",
+    title: "行业 ISV 垂直 Agent 销售方案",
+    description: "针对电商、医疗、金融等垂直行业 Agent 客户",
+    template:
+      "客户是 [行业] 领域的 ISV，正在构建 [具体 Agent 名称]，面向 [目标用户] 提供服务。\n\n请帮我设计针对该客户的完整销售方案：\n1. 分析 [行业] Agent 的具体执行需求（代码运行、文件处理、外部 API 调用等）\n2. 说明 ScaleBox 如何满足这些需求\n3. 合规和安全隔离对 [行业] 的特殊重要性\n4. 具体的技术实现方案和集成路径\n5. 成本对比（自建 vs ScaleBox）\n6. 参考案例和预期 ROI\n\n语调要展现对该行业的深度理解。",
+    variables: ["行业", "具体 Agent 名称", "目标用户"],
+  },
+  {
+    id: "agent_005",
+    category: "agent_scenarios",
+    title: "大规模并发 Agent 架构方案",
+    description: "针对需要大规模并发运行 Agent 的客户",
+    template:
+      "客户 [客户公司] 预期同时运行 [预期并发数] 个 Agent 实例，需要大规模并发沙盒支持。\n\n请帮我设计架构方案：\n1. 说明 ScaleBox 按需水平扩展的能力（支持成千上万独立沙盒并发）\n2. 成本模型分析（订阅费 + 按量计费 vs 自建集群）\n3. 资源调度和隔离策略\n4. 监控和运维方案\n5. 并发超过 400 后的私有化方案探讨\n6. 具体的扩展路径和技术支持\n\n语调要展现技术深度和规模化思维。",
+    variables: ["客户公司", "预期并发数"],
+  },
+  {
+    id: "agent_006",
+    category: "agent_scenarios",
+    title: "\$100 代金券注册引导话术",
+    description: "引导潜在客户免费注册并开始测试的话术",
+    template:
+      "客户 [客户公司] 对 ScaleBox 有初步兴趣但还未决定测试。\n\n请帮我设计一套引导注册试用的话术：\n1. 强调免费注册 + \$100 代金券的价值（无需信用卡）\n2. 说明 5-10 分钟内可以完成第一个沙盒的具体步骤\n3. 指引客户到具体文档和快速入门指南\n4. 设计一个具体的测试目标（针对 [客户公司] 的具体场景）\n5. 后续跟进计划\n\n语调要热情积极，降低客户的行动门槛。",
+    variables: ["客户公司"],
+  },
 ];
-
 export function getPromptsByCategory(category: PromptCategory): PromptTemplate[] {
   return PROMPTS.filter((p) => p.category === category);
 }
