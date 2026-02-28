@@ -7,6 +7,7 @@ import {
   Platform,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -120,11 +121,24 @@ export default function CustomersScreen() {
   const colors = useColors();
   const { customers, loading, deleteCustomer } = useCustomers();
   const [selectedStage, setSelectedStage] = useState<CustomerStage | "all">("all");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const searchFiltered = searchQuery.trim()
+    ? customers.filter((c) => {
+        const q = searchQuery.trim().toLowerCase();
+        return (
+          c.companyName.toLowerCase().includes(q) ||
+          c.contactName.toLowerCase().includes(q) ||
+          (c.industry && c.industry.toLowerCase().includes(q)) ||
+          (c.title && c.title.toLowerCase().includes(q))
+        );
+      })
+    : customers;
 
   const filteredCustomers =
     selectedStage === "all"
-      ? customers
-      : customers.filter((c) => c.stage === selectedStage);
+      ? searchFiltered
+      : searchFiltered.filter((c) => c.stage === selectedStage);
 
   const stageCounts = STAGE_FILTERS.reduce(
     (acc, f) => {
@@ -157,6 +171,25 @@ export default function CustomersScreen() {
           <IconSymbol name="plus" size={20} color="#fff" />
           <Text style={styles.addBtnText}>新增</Text>
         </TouchableOpacity>
+      </View>
+
+      {/* Search Bar */}
+      <View style={[styles.searchBar, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <IconSymbol name="magnifyingglass" size={16} color={colors.muted} />
+        <TextInput
+          style={[styles.searchInput, { color: colors.foreground }]}
+          placeholder="搜索公司名、联系人、行业..."
+          placeholderTextColor={colors.muted}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          returnKeyType="search"
+          clearButtonMode="while-editing"
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery("")} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <IconSymbol name="xmark.circle.fill" size={16} color={colors.muted} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Stage Filter */}
@@ -220,12 +253,20 @@ export default function CustomersScreen() {
         </View>
       ) : filteredCustomers.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyIcon}>👥</Text>
+          <Text style={styles.emptyIcon}>{searchQuery.trim() ? "🔍" : "👥"}</Text>
           <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-            {selectedStage === "all" ? "还没有客户" : "该阶段暂无客户"}
+            {searchQuery.trim()
+              ? `未找到「${searchQuery}」相关客户`
+              : selectedStage === "all"
+                ? "还没有客户"
+                : "该阶段暂无客户"}
           </Text>
           <Text style={[styles.emptyText, { color: colors.muted }]}>
-            {selectedStage === "all" ? "点击右上角「新增」添加第一位客户" : "切换其他阶段或新增客户"}
+            {searchQuery.trim()
+              ? "尝试搜索公司名、联系人姓名或行业关键词"
+              : selectedStage === "all"
+                ? "点击右上角「新增」添加第一位客户"
+                : "切换其他阶段或新增客户"}
           </Text>
         </View>
       ) : (
@@ -277,6 +318,23 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 14,
     fontWeight: "600",
+  },
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginHorizontal: 12,
+    marginTop: 10,
+    marginBottom: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 12,
+    borderWidth: 0.5,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    paddingVertical: 0,
   },
   filterList: {
     maxHeight: 52,
