@@ -1,5 +1,6 @@
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
+import * as Sharing from "expo-sharing";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
@@ -71,6 +72,46 @@ export default function LibraryScreen() {
     [addToHistory],
   );
 
+  const handleSharePrompt = useCallback(
+    async (prompt: PromptTemplate) => {
+      const shareText = `💡 ScaleBox 销售提示词：${prompt.title}
+
+${prompt.template}
+
+——
+🚀 ScaleBox 智能体沙盒基础设施
+🔗 www.scalebox.dev`;
+      try {
+        if (Platform.OS === "web") {
+          await Clipboard.setStringAsync(shareText);
+          Alert.alert("已复制", "分享内容已复制，可直接粘贴分享");
+        } else {
+          const isAvailable = await Sharing.isAvailableAsync();
+          if (isAvailable) {
+            // Write to temp file for sharing
+            const FileSystem = await import("expo-file-system/legacy");
+            const fileUri = FileSystem.cacheDirectory + `scalebox_prompt_${prompt.id}.txt`;
+            await FileSystem.writeAsStringAsync(fileUri, shareText, { encoding: FileSystem.EncodingType.UTF8 });
+            await Sharing.shareAsync(fileUri, {
+              mimeType: "text/plain",
+              dialogTitle: `分享提示词：${prompt.title}`,
+            });
+          } else {
+            await Clipboard.setStringAsync(shareText);
+            Alert.alert("已复制", "分享内容已复制到剪贴板");
+          }
+        }
+        if (Platform.OS !== "web") {
+          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }
+      } catch (e) {
+        await Clipboard.setStringAsync(shareText);
+        Alert.alert("已复制", "分享内容已复制到剪贴板");
+      }
+    },
+    [],
+  );
+
   const handleFavorite = useCallback(
     async (prompt: PromptTemplate) => {
       await addFavorite({
@@ -140,6 +181,14 @@ export default function LibraryScreen() {
             >
               <IconSymbol name="doc.on.clipboard" size={16} color={colors.primary} />
               <Text style={[styles.actionBtnText, { color: colors.primary }]}>复制</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.actionBtnSecondary, { borderColor: colors.border }]}
+              onPress={() => handleSharePrompt(item)}
+              activeOpacity={0.75}
+            >
+              <IconSymbol name="square.and.arrow.up" size={16} color={colors.primary} />
+              <Text style={[styles.actionBtnText, { color: colors.primary }]}>分享</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.actionBtn, styles.actionBtnPrimary, { backgroundColor: colors.primary }]}

@@ -36,6 +36,8 @@ const MAPPING = {
   "cpu": "memory",
   "bolt.fill": "bolt",
   "envelope.fill": "email",
+  "phone.fill": "phone",
+  "doc.on.doc": "content-copy",
   "person.2.fill": "group",
   "chart.bar.fill": "bar-chart",
   "chart.bar.xaxis": "leaderboard",

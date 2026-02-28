@@ -1,5 +1,6 @@
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
+import * as Sharing from "expo-sharing";
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import {
@@ -123,6 +124,38 @@ export default function GenerateScreen() {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
     Alert.alert("已复制", "内容已复制到剪贴板");
+  };
+  const handleShare = async () => {
+    if (!generatedContent) return;
+    const title = selectedPrompt?.title ?? "ScaleBox 销售内容";
+    const shareText = `💡 ${title}
+
+${generatedContent}
+
+——
+🚀 ScaleBox 智能体沙盒基础设施
+🔗 www.scalebox.dev`;
+    try {
+      if (Platform.OS === "web") {
+        await Clipboard.setStringAsync(shareText);
+        Alert.alert("已复制", "分享内容已复制，可直接粘贴分享");
+      } else {
+        const isAvailable = await Sharing.isAvailableAsync();
+        if (isAvailable) {
+          const FileSystem = await import("expo-file-system/legacy");
+          const fileUri = FileSystem.cacheDirectory + `scalebox_generated_${Date.now()}.txt`;
+          await FileSystem.writeAsStringAsync(fileUri, shareText, { encoding: FileSystem.EncodingType.UTF8 });
+          await Sharing.shareAsync(fileUri, { mimeType: "text/plain", dialogTitle: `分享：${title}` });
+        } else {
+          await Clipboard.setStringAsync(shareText);
+          Alert.alert("已复制", "分享内容已复制到剪贴板");
+        }
+      }
+      if (Platform.OS !== "web") await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch {
+      await Clipboard.setStringAsync(shareText);
+      Alert.alert("已复制", "分享内容已复制到剪贴板");
+    }
   };
 
   const handleSaveFavorite = async () => {
@@ -330,6 +363,12 @@ export default function GenerateScreen() {
                   >
                     <IconSymbol name="doc.on.clipboard" size={16} color={colors.primary} />
                   </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.resultActionBtn, { borderColor: colors.border }]}
+                    onPress={handleShare}
+                  >
+                    <IconSymbol name="square.and.arrow.up" size={16} color={colors.primary} />
+                  </TouchableOpacity>
                 </View>
               </View>
               <View
@@ -340,14 +379,24 @@ export default function GenerateScreen() {
               >
                 <Text style={[styles.resultText, { color: colors.foreground }]}>{generatedContent}</Text>
               </View>
-              <TouchableOpacity
-                style={[styles.copyFullBtn, { backgroundColor: colors.primary }]}
-                onPress={handleCopy}
-                activeOpacity={0.8}
-              >
-                <IconSymbol name="doc.on.clipboard" size={18} color="#FFFFFF" />
-                <Text style={styles.copyFullBtnText}>复制全部内容</Text>
-              </TouchableOpacity>
+              <View style={styles.bottomActions}>
+                <TouchableOpacity
+                  style={[styles.copyFullBtn, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, flex: 1 }]}
+                  onPress={handleCopy}
+                  activeOpacity={0.8}
+                >
+                  <IconSymbol name="doc.on.clipboard" size={18} color={colors.primary} />
+                  <Text style={[styles.copyFullBtnText, { color: colors.primary }]}>复制</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.copyFullBtn, { backgroundColor: colors.primary, flex: 1 }]}
+                  onPress={handleShare}
+                  activeOpacity={0.8}
+                >
+                  <IconSymbol name="square.and.arrow.up" size={18} color="#FFFFFF" />
+                  <Text style={styles.copyFullBtnText}>分享</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           ) : null}
 
@@ -517,6 +566,10 @@ const styles = StyleSheet.create({
   resultText: {
     fontSize: 14,
     lineHeight: 22,
+  },
+  bottomActions: {
+    flexDirection: "row",
+    gap: 10,
   },
   copyFullBtn: {
     flexDirection: "row",
