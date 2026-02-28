@@ -30,7 +30,7 @@ import { trpc } from "@/lib/trpc";
 
 export default function GenerateScreen() {
   const colors = useColors();
-  const params = useLocalSearchParams<{ promptId?: string }>();
+  const params = useLocalSearchParams<{ promptId?: string; prefillCompany?: string; prefillContact?: string }>();
   const { addFavorite, addToHistory } = useFavorites();
 
   const [selectedPrompt, setSelectedPrompt] = useState<PromptTemplate | null>(null);
@@ -47,11 +47,27 @@ export default function GenerateScreen() {
       const prompt = PROMPTS.find((p) => p.id === params.promptId);
       if (prompt) {
         setSelectedPrompt(prompt);
-        setVariables({});
+        // Pre-fill variables from customer context
+        const prefilled: Record<string, string> = {};
+        if (params.prefillCompany) {
+          for (const v of prompt.variables) {
+            if (v.includes("公司") || v.includes("company") || v.includes("客户")) {
+              prefilled[v] = params.prefillCompany;
+            }
+          }
+        }
+        if (params.prefillContact) {
+          for (const v of prompt.variables) {
+            if (v.includes("联系人") || v.includes("contact") || v.includes("姓名")) {
+              prefilled[v] = params.prefillContact;
+            }
+          }
+        }
+        setVariables(prefilled);
         setGeneratedContent("");
       }
     }
-  }, [params.promptId]);
+  }, [params.promptId, params.prefillCompany, params.prefillContact]);
 
   const filteredPrompts = searchQuery
     ? PROMPTS.filter(

@@ -8,13 +8,14 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
 
 // ─── Tab types ────────────────────────────────────────────────────────────────
-type Tab = "overview" | "tech" | "compare" | "customers";
+type Tab = "overview" | "tech" | "compare" | "customers" | "calculator";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "overview", label: "产品概览" },
   { id: "tech", label: "技术特性" },
   { id: "compare", label: "竞品对比" },
   { id: "customers", label: "目标客户" },
+  { id: "calculator", label: "🧭 计算器" },
 ];
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
@@ -201,10 +202,67 @@ const PRICING_PLANS = [
   },
 ];
 
+// ─── Calculator Plans ─────────────────────────────────────────────────────────
+const CALC_PLANS = [
+  {
+    name: "Hobby",
+    color: "#6B7280",
+    monthlyBase: 0,
+    maxConcurrent: 20,
+    cpuPerSandbox: 8,
+    ramPerSandbox: 8,
+    storagePerSandbox: 2,
+    usageRates: { cpu: 0.000225, ram: 0.0000125, storage: 0.000003 },
+  },
+  {
+    name: "Pro",
+    color: "#6C47FF",
+    monthlyBase: 99.99,
+    maxConcurrent: 100,
+    cpuPerSandbox: 8,
+    ramPerSandbox: 16,
+    storagePerSandbox: 8,
+    usageRates: { cpu: 0.000225, ram: 0.0000125, storage: 0.000003 },
+  },
+  {
+    name: "Ultimate",
+    color: "#00D4AA",
+    monthlyBase: 199.99,
+    maxConcurrent: 400,
+    cpuPerSandbox: 16,
+    ramPerSandbox: 16,
+    storagePerSandbox: 16,
+    usageRates: { cpu: 0.000225, ram: 0.0000125, storage: 0.000003 },
+  },
+];
+
+// Self-hosted cost estimate: ~$0.05/sandbox-hour (server + ops + maintenance)
+const SELF_HOSTED_COST_PER_SANDBOX_HOUR = 0.05;
+
 // ─── Component ─────────────────────────────────────────────────────────────────
 export default function ProductScreen() {
   const colors = useColors();
   const [activeTab, setActiveTab] = useState<Tab>("overview");
+  // Calculator state
+  const [concurrentSandboxes, setConcurrentSandboxes] = useState(50);
+  const [hoursPerDay, setHoursPerDay] = useState(8);
+  const [daysPerMonth, setDaysPerMonth] = useState(22);
+
+  const calcResults = CALC_PLANS.map((plan) => {
+    const totalHours = hoursPerDay * daysPerMonth;
+    const cpuCost = plan.usageRates.cpu * plan.cpuPerSandbox * concurrentSandboxes * totalHours;
+    const ramCost = plan.usageRates.ram * plan.ramPerSandbox * 1024 * concurrentSandboxes * totalHours;
+    const storageCost = plan.usageRates.storage * plan.storagePerSandbox * 1024 * concurrentSandboxes * totalHours;
+    const usageCost = cpuCost + ramCost + storageCost;
+    const total = plan.monthlyBase + usageCost;
+    const selfHosted = SELF_HOSTED_COST_PER_SANDBOX_HOUR * concurrentSandboxes * totalHours;
+    const savings = selfHosted - total;
+    const savingsPct = selfHosted > 0 ? Math.round((savings / selfHosted) * 100) : 0;
+    const feasible = concurrentSandboxes <= plan.maxConcurrent;
+    return { ...plan, usageCost, total, selfHosted, savings, savingsPct, feasible };
+  });
+
+  const bestPlan = calcResults.filter((r) => r.feasible).sort((a, b) => a.total - b.total)[0];
 
   const openWebsite = async () => {
     if (Platform.OS !== "web") await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -523,6 +581,174 @@ export default function ProductScreen() {
           </View>
         )}
 
+        {/* ── Calculator Tab ── */}
+        {activeTab === "calculator" && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>并发计算器</Text>
+
+            {/* Input Card */}
+            <View style={[styles.calcCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.calcCardTitle, { color: colors.foreground }]}>输入你的使用场景</Text>
+
+              {/* Concurrent Sandboxes */}
+              <View style={styles.calcInputRow}>
+                <View style={styles.calcInputLabel}>
+                  <Text style={[styles.calcInputTitle, { color: colors.foreground }]}>并发沙盒数</Text>
+                  <Text style={[styles.calcInputSub, { color: colors.muted }]}>同时运行的 Agent 数量</Text>
+                </View>
+                <View style={styles.calcStepper}>
+                  <TouchableOpacity
+                    style={[styles.stepBtn, { backgroundColor: colors.border }]}
+                    onPress={() => setConcurrentSandboxes(Math.max(1, concurrentSandboxes - 10))}
+                  >
+                    <Text style={[styles.stepBtnText, { color: colors.foreground }]}>-</Text>
+                  </TouchableOpacity>
+                  <Text style={[styles.stepValue, { color: colors.primary }]}>{concurrentSandboxes}</Text>
+                  <TouchableOpacity
+                    style={[styles.stepBtn, { backgroundColor: colors.border }]}
+                    onPress={() => setConcurrentSandboxes(Math.min(400, concurrentSandboxes + 10))}
+                  >
+                    <Text style={[styles.stepBtnText, { color: colors.foreground }]}>+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Hours per day */}
+              <View style={[styles.calcInputRow, { borderTopWidth: 0.5, borderTopColor: colors.border, paddingTop: 12 }]}>
+                <View style={styles.calcInputLabel}>
+                  <Text style={[styles.calcInputTitle, { color: colors.foreground }]}>每日使用小时</Text>
+                  <Text style={[styles.calcInputSub, { color: colors.muted }]}>平均每天运行时长</Text>
+                </View>
+                <View style={styles.calcStepper}>
+                  <TouchableOpacity
+                    style={[styles.stepBtn, { backgroundColor: colors.border }]}
+                    onPress={() => setHoursPerDay(Math.max(1, hoursPerDay - 1))}
+                  >
+                    <Text style={[styles.stepBtnText, { color: colors.foreground }]}>-</Text>
+                  </TouchableOpacity>
+                  <Text style={[styles.stepValue, { color: colors.primary }]}>{hoursPerDay}h</Text>
+                  <TouchableOpacity
+                    style={[styles.stepBtn, { backgroundColor: colors.border }]}
+                    onPress={() => setHoursPerDay(Math.min(24, hoursPerDay + 1))}
+                  >
+                    <Text style={[styles.stepBtnText, { color: colors.foreground }]}>+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Days per month */}
+              <View style={[styles.calcInputRow, { borderTopWidth: 0.5, borderTopColor: colors.border, paddingTop: 12 }]}>
+                <View style={styles.calcInputLabel}>
+                  <Text style={[styles.calcInputTitle, { color: colors.foreground }]}>每月工作天数</Text>
+                  <Text style={[styles.calcInputSub, { color: colors.muted }]}>每月预计使用天数</Text>
+                </View>
+                <View style={styles.calcStepper}>
+                  <TouchableOpacity
+                    style={[styles.stepBtn, { backgroundColor: colors.border }]}
+                    onPress={() => setDaysPerMonth(Math.max(1, daysPerMonth - 1))}
+                  >
+                    <Text style={[styles.stepBtnText, { color: colors.foreground }]}>-</Text>
+                  </TouchableOpacity>
+                  <Text style={[styles.stepValue, { color: colors.primary }]}>{daysPerMonth}天</Text>
+                  <TouchableOpacity
+                    style={[styles.stepBtn, { backgroundColor: colors.border }]}
+                    onPress={() => setDaysPerMonth(Math.min(31, daysPerMonth + 1))}
+                  >
+                    <Text style={[styles.stepBtnText, { color: colors.foreground }]}>+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Summary */}
+              <View style={[styles.calcSummary, { backgroundColor: colors.primary + "10", borderColor: colors.primary + "30" }]}>
+                <Text style={[styles.calcSummaryText, { color: colors.muted }]}>
+                  每月总计：<Text style={{ color: colors.primary, fontWeight: "700" }}>{concurrentSandboxes} 沙盒 × {hoursPerDay}h × {daysPerMonth}天 = {(concurrentSandboxes * hoursPerDay * daysPerMonth).toLocaleString()} 沙盒小时</Text>
+                </Text>
+              </View>
+            </View>
+
+            {/* Results */}
+            <Text style={[styles.calcResultTitle, { color: colors.muted }]}>方案对比</Text>
+            {calcResults.map((result) => {
+              const isBest = bestPlan?.name === result.name;
+              return (
+                <View
+                  key={result.name}
+                  style={[
+                    styles.calcResultCard,
+                    {
+                      backgroundColor: colors.surface,
+                      borderColor: isBest ? result.color : colors.border,
+                      borderWidth: isBest ? 2 : 0.5,
+                    },
+                  ]}
+                >
+                  {isBest && (
+                    <View style={[styles.calcBestBadge, { backgroundColor: result.color }]}>
+                      <Text style={styles.calcBestBadgeText}>★ 推荐方案</Text>
+                    </View>
+                  )}
+                  <View style={styles.calcResultHeader}>
+                    <View style={[styles.calcPlanDot, { backgroundColor: result.color }]} />
+                    <Text style={[styles.calcPlanName, { color: colors.foreground }]}>{result.name}</Text>
+                    <Text style={[styles.calcMaxConcurrent, { color: colors.muted }]}>最多 {result.maxConcurrent} 并发</Text>
+                    {!result.feasible && (
+                      <View style={[styles.calcOverLimit, { backgroundColor: colors.error + "20" }]}>
+                        <Text style={[styles.calcOverLimitText, { color: colors.error }]}>超出限额</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {result.feasible ? (
+                    <>
+                      <View style={styles.calcCostRow}>
+                        <View style={styles.calcCostItem}>
+                          <Text style={[styles.calcCostLabel, { color: colors.muted }]}>月订阅费</Text>
+                          <Text style={[styles.calcCostValue, { color: colors.foreground }]}>${result.monthlyBase.toFixed(2)}</Text>
+                        </View>
+                        <View style={styles.calcCostItem}>
+                          <Text style={[styles.calcCostLabel, { color: colors.muted }]}>按量计费</Text>
+                          <Text style={[styles.calcCostValue, { color: colors.foreground }]}>${result.usageCost.toFixed(2)}</Text>
+                        </View>
+                        <View style={styles.calcCostItem}>
+                          <Text style={[styles.calcCostLabel, { color: colors.muted }]}>月总费用</Text>
+                          <Text style={[styles.calcCostValue, { color: result.color, fontWeight: "800" }]}>${result.total.toFixed(2)}</Text>
+                        </View>
+                      </View>
+                      <View style={[styles.calcRoiRow, { backgroundColor: result.color + "10", borderColor: result.color + "30" }]}>
+                        <Text style={[styles.calcRoiLabel, { color: colors.muted }]}>自建基础设施估算</Text>
+                        <Text style={[styles.calcRoiValue, { color: result.color }]}>${result.selfHosted.toFixed(0)}/月</Text>
+                        <Text style={[styles.calcSavings, { color: result.savings > 0 ? "#22C55E" : colors.error }]}>
+                          {result.savings > 0 ? `节省 $${result.savings.toFixed(0)} (${result.savingsPct}%)` : `超出 $${Math.abs(result.savings).toFixed(0)}`}
+                        </Text>
+                      </View>
+                    </>
+                  ) : (
+                    <Text style={[styles.calcOverLimitDesc, { color: colors.muted }]}>
+                      当前并发数 ({concurrentSandboxes}) 超过 {result.name} 最大并发限制 ({result.maxConcurrent})，请升级方案或联系销售讨论私有化部署。
+                    </Text>
+                  )}
+                </View>
+              );
+            })}
+
+            {/* ROI Note */}
+            <View style={[styles.calcNote, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.calcNoteTitle, { color: colors.foreground }]}>💡 ROI 说明</Text>
+              <Text style={[styles.calcNoteText, { color: colors.muted }]}>
+                自建估算基于 $0.05/沙盒小时（包含服务器租赁、运维、开发维护成本）。实际节省还包括：免去开发并发调度系统、安全隔离、弹性扩容等隐性成本。并发超过 400 后可探讨私有化方案。
+              </Text>
+              <TouchableOpacity
+                style={[styles.calcNoteBtn, { backgroundColor: colors.primary }]}
+                onPress={openWebsite}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.calcNoteBtnText}>免费注册领 $100 代金券</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         <View style={{ height: 30 }} />
       </ScrollView>
     </ScreenContainer>
@@ -628,4 +854,41 @@ const styles = StyleSheet.create({
   ctaDesc: { fontSize: 13, lineHeight: 20, textAlign: "center" },
   ctaBtn: { paddingHorizontal: 24, paddingVertical: 13, borderRadius: 12, marginTop: 4 },
   ctaBtnText: { color: "#FFF", fontSize: 15, fontWeight: "700" },
+  // Calculator
+  calcCard: { borderRadius: 16, borderWidth: 0.5, padding: 16, gap: 12, marginBottom: 16 },
+  calcCardTitle: { fontSize: 15, fontWeight: "700", marginBottom: 4 },
+  calcInputRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  calcInputLabel: { flex: 1, gap: 2 },
+  calcInputTitle: { fontSize: 14, fontWeight: "600" },
+  calcInputSub: { fontSize: 11 },
+  calcStepper: { flexDirection: "row", alignItems: "center", gap: 12 },
+  stepBtn: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
+  stepBtnText: { fontSize: 18, fontWeight: "700", lineHeight: 22 },
+  stepValue: { fontSize: 16, fontWeight: "800", minWidth: 48, textAlign: "center" },
+  calcSummary: { borderRadius: 10, padding: 10, borderWidth: 1, marginTop: 4 },
+  calcSummaryText: { fontSize: 12, lineHeight: 18 },
+  calcResultTitle: { fontSize: 13, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8, paddingHorizontal: 4 },
+  calcResultCard: { borderRadius: 14, padding: 14, marginBottom: 10, overflow: "hidden", gap: 10 },
+  calcBestBadge: { position: "absolute", top: 0, right: 0, paddingHorizontal: 10, paddingVertical: 4, borderBottomLeftRadius: 10 },
+  calcBestBadgeText: { color: "#FFF", fontSize: 11, fontWeight: "700" },
+  calcResultHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
+  calcPlanDot: { width: 10, height: 10, borderRadius: 5 },
+  calcPlanName: { fontSize: 16, fontWeight: "800", flex: 1 },
+  calcMaxConcurrent: { fontSize: 12 },
+  calcOverLimit: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  calcOverLimitText: { fontSize: 11, fontWeight: "700" },
+  calcOverLimitDesc: { fontSize: 13, lineHeight: 19 },
+  calcCostRow: { flexDirection: "row", gap: 0 },
+  calcCostItem: { flex: 1, alignItems: "center", gap: 3 },
+  calcCostLabel: { fontSize: 11 },
+  calcCostValue: { fontSize: 15, fontWeight: "700" },
+  calcRoiRow: { flexDirection: "row", alignItems: "center", borderRadius: 10, padding: 10, borderWidth: 1, gap: 8 },
+  calcRoiLabel: { fontSize: 11, flex: 1 },
+  calcRoiValue: { fontSize: 13, fontWeight: "700" },
+  calcSavings: { fontSize: 12, fontWeight: "700" },
+  calcNote: { borderRadius: 14, borderWidth: 0.5, padding: 16, gap: 10, marginTop: 4 },
+  calcNoteTitle: { fontSize: 15, fontWeight: "700" },
+  calcNoteText: { fontSize: 13, lineHeight: 20 },
+  calcNoteBtn: { borderRadius: 10, paddingVertical: 12, alignItems: "center" },
+  calcNoteBtnText: { color: "#FFF", fontSize: 14, fontWeight: "700" },
 });

@@ -1,7 +1,7 @@
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -20,6 +20,43 @@ import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
 import { CustomerStage, FollowUpRecord, STAGE_INFO, useCustomers } from "@/hooks/use-customers";
+import { CATEGORY_INFO, PROMPTS, PromptTemplate } from "@/lib/prompts-data";
+
+// Industry → recommended prompt categories mapping
+const INDUSTRY_PROMPT_MAP: Record<string, string[]> = {
+  "AI 智能体": ["agent_scenarios", "architecture", "scalebox_pitch"],
+  "行业 ISV": ["scalebox_pitch", "pricing_roi", "architecture"],
+  "企业客户": ["customer_research", "email_templates", "pricing_roi"],
+  "开发者": ["architecture", "agent_scenarios", "competitive"],
+  "金融": ["customer_research", "scalebox_pitch", "pricing_roi"],
+  "医疗": ["customer_research", "scalebox_pitch", "pricing_roi"],
+  "教育": ["customer_research", "scalebox_pitch", "email_templates"],
+  "电商": ["customer_research", "scalebox_pitch", "pricing_roi"],
+  "制造": ["architecture", "scalebox_pitch", "pricing_roi"],
+};
+
+function getRecommendedPrompts(industry: string, stage: CustomerStage): PromptTemplate[] {
+  // Stage-based category priority
+  const stageCats: Record<CustomerStage, string[]> = {
+    initial_contact: ["customer_research", "email_templates"],
+    demo: ["scalebox_pitch", "architecture", "role_play"],
+    proposal: ["pricing_roi", "competitive", "email_templates"],
+    closed_won: ["email_templates"],
+    closed_lost: ["role_play", "competitive"],
+  };
+  // Merge industry + stage categories, deduplicate
+  const industryCats = INDUSTRY_PROMPT_MAP[industry] ?? ["scalebox_pitch", "customer_research"];
+  const stageCatsForStage = stageCats[stage] ?? [];
+  const allCats = [...new Set([...stageCatsForStage, ...industryCats])];
+  // Pick up to 2 prompts per category, max 6 total
+  const results: PromptTemplate[] = [];
+  for (const cat of allCats) {
+    const catPrompts = PROMPTS.filter((p) => p.category === cat).slice(0, 2);
+    results.push(...catPrompts);
+    if (results.length >= 6) break;
+  }
+  return results.slice(0, 6);
+}
 
 const FOLLOW_UP_TYPES: Array<{
   key: FollowUpRecord["type"];
@@ -56,6 +93,24 @@ export default function CustomerDetailScreen() {
   const [followUpContent, setFollowUpContent] = useState("");
   const [followUpType, setFollowUpType] = useState<FollowUpRecord["type"]>("note");
   const [showStageModal, setShowStageModal] = useState(false);
+
+  const recommendedPrompts = useMemo(
+    () => (customer ? getRecommendedPrompts(customer.industry, customer.stage) : []),
+    [customer?.industry, customer?.stage],
+  );
+
+  const handleUsePrompt = (prompt: PromptTemplate) => {
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // Navigate to AI generator with promptId and pre-fill company name
+    router.push({
+      pathname: "/(tabs)/generate" as any,
+      params: {
+        promptId: prompt.id,
+        prefillCompany: customer?.companyName ?? "",
+        prefillContact: customer?.contactName ?? "",
+      },
+    });
+  };
 
   if (!customer) {
     return (
@@ -377,6 +432,46 @@ export default function CustomerDetailScreen() {
               </View>
             )}
           </View>
+
+          {/* Recommended Prompts */}
+          {recommendedPrompts.length > 0 && (
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: colors.muted }]}>推荐提示词</Text>
+              <Text style={[styles.recSubtitle, { color: colors.muted }]}>
+                根据客户行业「{customer.industry || "通用"}」和当前阶段「{STAGE_INFO[customer.stage].label}」智能推荐
+              </Text>
+              {recommendedPrompts.map((prompt) => {
+                const catInfo = CATEGORY_INFO[prompt.category];
+                return (
+                  <TouchableOpacity
+                    key={prompt.id}
+                    style={[styles.recCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                    onPress={() => handleUsePrompt(prompt)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.recCardLeft}>
+                      <View style={[styles.recCatDot, { backgroundColor: catInfo.color + "20" }]}>
+                        <IconSymbol name={catInfo.icon as any} size={16} color={catInfo.color} />
+                      </View>
+                      <View style={styles.recCardInfo}>
+                        <Text style={[styles.recCatLabel, { color: catInfo.color }]}>{catInfo.label}</Text>
+                        <Text style={[styles.recTitle, { color: colors.foreground }]} numberOfLines={1}>
+                          {prompt.title}
+                        </Text>
+                        <Text style={[styles.recDesc, { color: colors.muted }]} numberOfLines={2}>
+                          {prompt.description}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={[styles.recUseBtn, { backgroundColor: colors.primary + "15" }]}>
+                      <IconSymbol name="wand.and.stars" size={14} color={colors.primary} />
+                      <Text style={[styles.recUseBtnText, { color: colors.primary }]}>AI 生成</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
 
           <View style={{ height: 40 }} />
         </ScrollView>
@@ -702,4 +797,23 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
   stageOptionText: { fontSize: 15, fontWeight: "500" },
+  // Recommended Prompts
+  recSubtitle: { fontSize: 12, lineHeight: 17, paddingHorizontal: 4, marginTop: -4 },
+  recCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 14,
+    borderWidth: 0.5,
+    padding: 12,
+    marginTop: 8,
+    gap: 10,
+  },
+  recCardLeft: { flex: 1, flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  recCatDot: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  recCardInfo: { flex: 1, gap: 2 },
+  recCatLabel: { fontSize: 11, fontWeight: "600" },
+  recTitle: { fontSize: 13, fontWeight: "700" },
+  recDesc: { fontSize: 12, lineHeight: 17 },
+  recUseBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, flexShrink: 0 },
+  recUseBtnText: { fontSize: 12, fontWeight: "600" },
 });
