@@ -1,11 +1,12 @@
 import { router } from "expo-router";
+import { useMemo } from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
 import { useFavorites } from "@/hooks/use-favorites";
-import { CATEGORY_INFO, PromptCategory } from "@/lib/prompts-data";
+import { CATEGORY_INFO, PROMPTS, PromptCategory } from "@/lib/prompts-data";
 
 const CATEGORIES: PromptCategory[] = [
   "customer_research",
@@ -21,6 +22,22 @@ const CATEGORIES: PromptCategory[] = [
 export default function HomeScreen() {
   const colors = useColors();
   const { favorites, history } = useFavorites();
+
+  // Compute Top 5 most-used prompts from history
+  const topPrompts = useMemo(() => {
+    const countMap: Record<string, number> = {};
+    for (const item of history) {
+      countMap[item.promptId] = (countMap[item.promptId] ?? 0) + 1;
+    }
+    return Object.entries(countMap)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([promptId, count]) => ({
+        prompt: PROMPTS.find((p) => p.id === promptId),
+        count,
+      }))
+      .filter((x) => x.prompt !== undefined) as { prompt: (typeof PROMPTS)[0]; count: number }[];
+  }, [history]);
 
   return (
     <ScreenContainer>
@@ -114,6 +131,63 @@ export default function HomeScreen() {
               );
             })}
           </View>
+        </View>
+
+        {/* Top 5 Most Used Prompts */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>🏆 最常用提示词</Text>
+            {topPrompts.length > 0 && (
+              <TouchableOpacity onPress={() => router.push("/(tabs)/library" as any)}>
+                <Text style={[styles.seeAll, { color: colors.primary }]}>查看全部</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          {topPrompts.length === 0 ? (
+            <View style={[styles.topEmptyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={styles.topEmptyIcon}>✨</Text>
+              <Text style={[styles.topEmptyTitle, { color: colors.foreground }]}>暂无使用记录</Text>
+              <Text style={[styles.topEmptyDesc, { color: colors.muted }]}>使用 AI 生成器后，最常用的提示词将出现在这里</Text>
+              <TouchableOpacity
+                style={[styles.topEmptyBtn, { backgroundColor: colors.primary }]}
+                onPress={() => router.push("/(tabs)/generate" as any)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.topEmptyBtnText}>立即体验 AI 生成</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.topList}>
+              {topPrompts.map(({ prompt, count }, index) => {
+                const catInfo = CATEGORY_INFO[prompt.category];
+                const rankColors = ["#F59E0B", "#9CA3AF", "#CD7F32", colors.muted, colors.muted];
+                return (
+                  <TouchableOpacity
+                    key={prompt.id}
+                    style={[styles.topItem, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                    onPress={() => router.push({ pathname: "/(tabs)/generate" as any, params: { promptId: prompt.id } })}
+                    activeOpacity={0.75}
+                  >
+                    <View style={[styles.rankBadge, { backgroundColor: rankColors[index] + "20" }]}>
+                      <Text style={[styles.rankText, { color: rankColors[index] }]}>#{index + 1}</Text>
+                    </View>
+                    <View style={[styles.topCatDot, { backgroundColor: catInfo.color + "20" }]}>
+                      <IconSymbol name={catInfo.icon as any} size={14} color={catInfo.color} />
+                    </View>
+                    <View style={styles.topItemInfo}>
+                      <Text style={[styles.topItemTitle, { color: colors.foreground }]} numberOfLines={1}>
+                        {prompt.title}
+                      </Text>
+                      <Text style={[styles.topItemMeta, { color: colors.muted }]}>
+                        {catInfo.label} · 使用 {count} 次
+                      </Text>
+                    </View>
+                    <IconSymbol name="chevron.right" size={14} color={colors.muted} />
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
         </View>
 
         {/* Recent History */}
@@ -400,4 +474,51 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
   },
+  // Top 5 styles
+  topEmptyCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 24,
+    alignItems: "center",
+    gap: 8,
+  },
+  topEmptyIcon: { fontSize: 36, marginBottom: 4 },
+  topEmptyTitle: { fontSize: 16, fontWeight: "700" },
+  topEmptyDesc: { fontSize: 13, textAlign: "center", lineHeight: 18 },
+  topEmptyBtn: {
+    marginTop: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  topEmptyBtnText: { color: "#fff", fontSize: 14, fontWeight: "600" },
+  topList: { gap: 8 },
+  topItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 14,
+    borderWidth: 0.5,
+    padding: 12,
+  },
+  rankBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  rankText: { fontSize: 12, fontWeight: "800" },
+  topCatDot: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  topItemInfo: { flex: 1, gap: 2 },
+  topItemTitle: { fontSize: 14, fontWeight: "600" },
+  topItemMeta: { fontSize: 12 },
 });
