@@ -68,6 +68,13 @@ const MAPPING = {
   "text.bubble.fill": "chat",
   "lightbulb.fill": "lightbulb",
   "flame.fill": "local-fire-department",
+  // Knowledge base
+  "folder.fill": "folder",
+  "doc.badge.plus": "note-add",
+  "arrow.up.doc.fill": "upload-file",
+  "doc.fill": "insert-drive-file",
+  "doc.text": "article",
+  "tray.and.arrow.up.fill": "cloud-upload",
 } as IconMapping;
 
 export function IconSymbol({

@@ -25,4 +25,19 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-// TODO: Add your tables here
+// Knowledge base documents table
+export const knowledgeDocs = mysqlTable("knowledge_docs", {
+  id: int("id").autoincrement().primaryKey(),
+  fileName: varchar("fileName", { length: 512 }).notNull(),
+  fileType: varchar("fileType", { length: 64 }).notNull(), // pdf | txt | docx | md
+  fileSize: int("fileSize").notNull(), // bytes
+  s3Url: text("s3Url").notNull(),
+  s3Key: varchar("s3Key", { length: 1024 }).notNull(),
+  extractedText: text("extractedText"), // plain text content extracted from document
+  uploadedBy: int("uploadedBy"), // user id (nullable for public uploads)
+  uploadedAt: timestamp("uploadedAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type KnowledgeDoc = typeof knowledgeDocs.$inferSelect;
+export type InsertKnowledgeDoc = typeof knowledgeDocs.$inferInsert;

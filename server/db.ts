@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { InsertKnowledgeDoc, InsertUser, knowledgeDocs, users } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -89,4 +89,64 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+// ===== Knowledge Docs =====
+
+export async function listKnowledgeDocs() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    id: knowledgeDocs.id,
+    fileName: knowledgeDocs.fileName,
+    fileType: knowledgeDocs.fileType,
+    fileSize: knowledgeDocs.fileSize,
+    s3Url: knowledgeDocs.s3Url,
+    s3Key: knowledgeDocs.s3Key,
+    uploadedBy: knowledgeDocs.uploadedBy,
+    uploadedAt: knowledgeDocs.uploadedAt,
+    // Omit extractedText from list for performance
+  }).from(knowledgeDocs).orderBy(desc(knowledgeDocs.uploadedAt));
+}
+
+export async function createKnowledgeDoc(data: InsertKnowledgeDoc) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(knowledgeDocs).values(data);
+  return result[0].insertId;
+}
+
+export async function deleteKnowledgeDoc(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(knowledgeDocs).where(eq(knowledgeDocs.id, id));
+}
+
+export async function getKnowledgeDocById(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(knowledgeDocs).where(eq(knowledgeDocs.id, id)).limit(1);
+  return result[0] ?? null;
+}
+
+/** Returns concatenated extracted text from all docs (capped at 8000 chars) for LLM context */
+export async function getKnowledgeContext(maxChars = 8000): Promise<string> {
+  const db = await getDb();
+  if (!db) return "";
+  const docs = await db.select({
+    fileName: knowledgeDocs.fileName,
+    extractedText: knowledgeDocs.extractedText,
+    uploadedAt: knowledgeDocs.uploadedAt,
+  }).from(knowledgeDocs).orderBy(desc(knowledgeDocs.uploadedAt)).limit(10);
+
+  if (docs.length === 0) return "";
+
+  let context = "=== ScaleBox 产品知识库 ===\n";
+  let remaining = maxChars;
+  for (const doc of docs) {
+    if (!doc.extractedText || remaining <= 0) break;
+    const header = `\n--- ${doc.fileName} (${doc.uploadedAt.toLocaleDateString("zh-CN")}) ---\n`;
+    const text = doc.extractedText.slice(0, remaining);
+    context += header + text;
+    remaining -= text.length + header.length;
+  }
+  return context;
+}

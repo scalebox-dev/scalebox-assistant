@@ -109,6 +109,7 @@ export default function GenerateScreen() {
           { role: "system", content: systemPrompt },
           { role: "user", content: filledTemplate },
         ],
+        useKnowledge: true,
       });
 
       const content = result.content || "生成失败，请重试";

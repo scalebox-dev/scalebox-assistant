@@ -68,6 +68,13 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <IconSymbol size={26} name="info.circle.fill" color={color} />,
         }}
       />
+      <Tabs.Screen
+        name="knowledge"
+        options={{
+          title: "知识库",
+          tabBarIcon: ({ color }) => <IconSymbol size={26} name="folder.fill" color={color} />,
+        }}
+      />
     </Tabs>
   );
 }
