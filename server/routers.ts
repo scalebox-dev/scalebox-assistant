@@ -1,6 +1,4 @@
 import { z } from "zod";
-import { COOKIE_NAME } from "../shared/const.js";
-import { getSessionCookieOptions } from "./_core/cookies";
 import { invokeLLM } from "./_core/llm";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
@@ -33,15 +31,6 @@ function randomSuffix() {
 export const appRouter = router({
   system: systemRouter,
 
-  auth: router({
-    me: publicProcedure.query((opts) => opts.ctx.user),
-    logout: publicProcedure.mutation(({ ctx }) => {
-      const cookieOptions = getSessionCookieOptions(ctx.req);
-      ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
-      return { success: true } as const;
-    }),
-  }),
-
   // ── AI generation (knowledge-aware) ───────────────────────────────────────
   ai: router({
     generate: publicProcedure
@@ -56,36 +45,67 @@ export const appRouter = router({
           useKnowledge: z.boolean().optional().default(true),
         }),
       )
-      .mutation(async ({ input }) => {
-        let messages = [...input.messages];
+      .mutation(async ({ input, ctx }) => {
+        console.log("[ai.generate] request", {
+          provider: ctx.llmProvider,
+          hasKey: Boolean(ctx.llmApiKey),
+          hasUrl: Boolean(ctx.llmApiUrl),
+          useKnowledge: input.useKnowledge,
+          messageCount: input.messages.length,
+        });
 
-        // Inject knowledge base context into system prompt if available
-        if (input.useKnowledge) {
-          const knowledgeCtx = await db.getKnowledgeContext(8000);
-          if (knowledgeCtx) {
-            const systemIdx = messages.findIndex((m) => m.role === "system");
-            const knowledgeBlock = `\n\n${knowledgeCtx}\n\n请优先参考以上知识库内容来回答，确保内容与最新产品信息一致。`;
-            if (systemIdx >= 0) {
-              messages[systemIdx] = {
-                ...messages[systemIdx],
-                content: messages[systemIdx].content + knowledgeBlock,
-              };
-            } else {
-              messages = [{ role: "system", content: `你是 ScaleBox 的专业销售助手。${knowledgeBlock}` }, ...messages];
+        try {
+          let messages = [...input.messages];
+
+          // Inject knowledge base context into system prompt if available
+          if (input.useKnowledge) {
+            const knowledgeCtx = await db.getKnowledgeContext(8000);
+            if (knowledgeCtx) {
+              const systemIdx = messages.findIndex((m) => m.role === "system");
+              const knowledgeBlock = `\n\n${knowledgeCtx}\n\n请优先参考以上知识库内容来回答，确保内容与最新产品信息一致。`;
+              if (systemIdx >= 0) {
+                messages[systemIdx] = {
+                  ...messages[systemIdx],
+                  content: messages[systemIdx].content + knowledgeBlock,
+                };
+              } else {
+                messages = [
+                  { role: "system", content: `你是 ScaleBox 的专业销售助手。${knowledgeBlock}` },
+                  ...messages,
+                ];
+              }
             }
           }
-        }
 
-        const response = await invokeLLM({ messages });
-        const firstChoice = response.choices?.[0];
-        const content = firstChoice?.message?.content;
-        const textContent =
-          typeof content === "string"
-            ? content
-            : Array.isArray(content)
-              ? content.map((c: any) => (c.type === "text" ? c.text : "")).join("")
-              : "";
-        return { content: textContent };
+          const override =
+            ctx.llmApiKey ?
+              { apiKey: ctx.llmApiKey, apiUrl: ctx.llmApiUrl, provider: ctx.llmProvider }
+            : undefined;
+
+          const response = await invokeLLM({ messages }, override);
+          const firstChoice = response.choices?.[0];
+          const content = firstChoice?.message?.content;
+          const textContent =
+            typeof content === "string"
+              ? content
+              : Array.isArray(content)
+                ? content.map((c: any) => (c.type === "text" ? c.text : "")).join("")
+                : "";
+
+          console.log("[ai.generate] success", {
+            provider: ctx.llmProvider,
+            length: textContent.length,
+          });
+
+          return { content: textContent };
+        } catch (err: any) {
+          console.error("[ai.generate] error", {
+            provider: ctx.llmProvider,
+            message: err?.message,
+            stack: err?.stack,
+          });
+          throw err;
+        }
       }),
   }),
 
@@ -106,10 +126,8 @@ export const appRouter = router({
           base64Content: z.string(),
         }),
       )
-      .mutation(async ({ input, ctx }) => {
-        const userId = ctx.user?.id ?? null;
-
-        // Upload to S3
+      .mutation(async ({ input }) => {
+        // Upload to local storage
         const s3Key = `knowledge/${Date.now()}-${randomSuffix()}-${input.fileName}`;
         const mimeMap: Record<string, string> = {
           pdf: "application/pdf",
@@ -123,7 +141,7 @@ export const appRouter = router({
         // Extract text
         const extractedText = extractTextFromBase64(input.base64Content, input.fileType);
 
-        // Save metadata to DB
+        // Save metadata to file-based store
         const id = await db.createKnowledgeDoc({
           fileName: input.fileName,
           fileType: input.fileType,
@@ -131,7 +149,7 @@ export const appRouter = router({
           s3Url,
           s3Key,
           extractedText,
-          uploadedBy: userId,
+          uploadedBy: null,
         });
 
         return { id, s3Url, fileName: input.fileName };

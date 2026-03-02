@@ -32,15 +32,14 @@ export type GenerateImageResponse = {
 };
 
 export async function generateImage(options: GenerateImageOptions): Promise<GenerateImageResponse> {
-  if (!ENV.forgeApiUrl) {
-    throw new Error("BUILT_IN_FORGE_API_URL is not configured");
+  if (!ENV.imageApiUrl) {
+    throw new Error("IMAGE_API_URL is not configured");
   }
-  if (!ENV.forgeApiKey) {
-    throw new Error("BUILT_IN_FORGE_API_KEY is not configured");
+  if (!ENV.imageApiKey) {
+    throw new Error("IMAGE_API_KEY is not configured");
   }
 
-  // Build the full URL by appending the service path to the base URL
-  const baseUrl = ENV.forgeApiUrl.endsWith("/") ? ENV.forgeApiUrl : `${ENV.forgeApiUrl}/`;
+  const baseUrl = ENV.imageApiUrl.endsWith("/") ? ENV.imageApiUrl : `${ENV.imageApiUrl}/`;
   const fullUrl = new URL("images.v1.ImageService/GenerateImage", baseUrl).toString();
 
   const response = await fetch(fullUrl, {
@@ -49,7 +48,7 @@ export async function generateImage(options: GenerateImageOptions): Promise<Gene
       accept: "application/json",
       "content-type": "application/json",
       "connect-protocol-version": "1",
-      authorization: `Bearer ${ENV.forgeApiKey}`,
+      authorization: `Bearer ${ENV.imageApiKey}`,
     },
     body: JSON.stringify({
       prompt: options.prompt,
@@ -73,7 +72,7 @@ export async function generateImage(options: GenerateImageOptions): Promise<Gene
   const base64Data = result.image.b64Json;
   const buffer = Buffer.from(base64Data, "base64");
 
-  // Save to S3
+  // Save to local storage
   const { url } = await storagePut(`generated/${Date.now()}.png`, buffer, result.image.mimeType);
   return {
     url,

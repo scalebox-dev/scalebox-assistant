@@ -1,11 +1,17 @@
 import "dotenv/config";
+import path from "path";
+import fs from "fs";
 import express from "express";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
+import { getStorageDir } from "../storage";
+
+/** When set (e.g. in Docker), serve frontend static export from this dir (same origin as API). */
+const WEB_BUILD_DIR = path.resolve(process.cwd(), "web-build");
+const hasWebBuild = () => fs.existsSync(WEB_BUILD_DIR);
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -39,7 +45,7 @@ async function startServer() {
     res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
     res.header(
       "Access-Control-Allow-Headers",
-      "Origin, X-Requested-With, Content-Type, Accept, Authorization",
+      "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-LLM-API-Key, X-LLM-API-URL, X-LLM-Provider",
     );
     res.header("Access-Control-Allow-Credentials", "true");
 
@@ -54,7 +60,12 @@ async function startServer() {
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
-  registerOAuthRoutes(app);
+  // Local file storage (replaces S3): serve uploaded files at /api/files/*
+  app.use("/api/files", express.static(getStorageDir(), { index: false }));
+
+  // No-auth stubs so frontend auth calls don't break
+  app.get("/api/auth/me", (_req, res) => res.json({ user: null }));
+  app.post("/api/auth/logout", (_req, res) => res.json({ success: true }));
 
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true, timestamp: Date.now() });
@@ -67,6 +78,15 @@ async function startServer() {
       createContext,
     }),
   );
+
+  // Serve frontend static export (Docker / production: same origin, no CORS)
+  if (hasWebBuild()) {
+    app.use(express.static(WEB_BUILD_DIR, { index: false }));
+    app.get("*", (req, res, next) => {
+      if (req.path.startsWith("/api/")) return next();
+      res.sendFile(path.join(WEB_BUILD_DIR, "index.html"));
+    });
+  }
 
   const preferredPort = parseInt(process.env.PORT || "3000");
   const port = await findAvailablePort(preferredPort);

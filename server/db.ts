@@ -1,150 +1,128 @@
-import { desc, eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
-import { InsertKnowledgeDoc, InsertUser, knowledgeDocs, users } from "../drizzle/schema";
-import { ENV } from "./_core/env";
+/**
+ * File-based store for knowledge docs (replaces MySQL/Drizzle).
+ * Metadata in .storage/knowledge_docs.json, files in .storage/files/knowledge/
+ */
 
-let _db: ReturnType<typeof drizzle> | null = null;
+import fs from "fs";
+import path from "path";
+import type { KnowledgeDoc } from "../shared/types";
 
-// Lazily create the drizzle instance so local tooling can run without a DB.
-export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
-    try {
-      _db = drizzle(process.env.DATABASE_URL);
-    } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
-      _db = null;
-    }
+const DATA_DIR = path.resolve(process.cwd(), ".storage");
+const META_FILE = path.join(DATA_DIR, "knowledge_docs.json");
+
+type StoredRow = Omit<KnowledgeDoc, "uploadedAt" | "updatedAt"> & {
+  uploadedAt: string;
+  updatedAt: string;
+};
+
+function ensureDataDir() {
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
   }
-  return _db;
 }
 
-export async function upsertUser(user: InsertUser): Promise<void> {
-  if (!user.openId) {
-    throw new Error("User openId is required for upsert");
+function readMeta(): StoredRow[] {
+  ensureDataDir();
+  if (!fs.existsSync(META_FILE)) {
+    return [];
   }
-
-  const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot upsert user: database not available");
-    return;
-  }
-
+  const raw = fs.readFileSync(META_FILE, "utf-8");
   try {
-    const values: InsertUser = {
-      openId: user.openId,
-    };
-    const updateSet: Record<string, unknown> = {};
+    return JSON.parse(raw) as StoredRow[];
+  } catch {
+    return [];
+  }
+}
 
-    const textFields = ["name", "email", "loginMethod"] as const;
-    type TextField = (typeof textFields)[number];
+function writeMeta(rows: StoredRow[]) {
+  ensureDataDir();
+  fs.writeFileSync(META_FILE, JSON.stringify(rows, null, 2), "utf-8");
+}
 
-    const assignNullable = (field: TextField) => {
-      const value = user[field];
-      if (value === undefined) return;
-      const normalized = value ?? null;
-      values[field] = normalized;
-      updateSet[field] = normalized;
-    };
+function toDoc(row: StoredRow): KnowledgeDoc {
+  return {
+    ...row,
+    uploadedAt: new Date(row.uploadedAt),
+    updatedAt: new Date(row.updatedAt),
+  };
+}
 
-    textFields.forEach(assignNullable);
+function toStored(doc: KnowledgeDoc): StoredRow {
+  return {
+    ...doc,
+    uploadedAt: doc.uploadedAt.toISOString(),
+    updatedAt: doc.updatedAt.toISOString(),
+  };
+}
 
-    if (user.lastSignedIn !== undefined) {
-      values.lastSignedIn = user.lastSignedIn;
-      updateSet.lastSignedIn = user.lastSignedIn;
-    }
-    if (user.role !== undefined) {
-      values.role = user.role;
-      updateSet.role = user.role;
-    } else if (user.openId === ENV.ownerOpenId) {
-      values.role = "admin";
-      updateSet.role = "admin";
-    }
-
-    if (!values.lastSignedIn) {
-      values.lastSignedIn = new Date();
-    }
-
-    if (Object.keys(updateSet).length === 0) {
-      updateSet.lastSignedIn = new Date();
-    }
-
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
-      set: updateSet,
+export async function listKnowledgeDocs(): Promise<Omit<KnowledgeDoc, "extractedText">[]> {
+  const rows = readMeta();
+  return rows
+    .sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime())
+    .map((r) => {
+      const { extractedText: _, ...rest } = toDoc(r);
+      return rest;
     });
-  } catch (error) {
-    console.error("[Database] Failed to upsert user:", error);
-    throw error;
-  }
 }
 
-export async function getUserByOpenId(openId: string) {
-  const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot get user: database not available");
-    return undefined;
-  }
-
-  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
-
-  return result.length > 0 ? result[0] : undefined;
+export async function createKnowledgeDoc(data: {
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  s3Url: string;
+  s3Key: string;
+  extractedText: string | null;
+  uploadedBy: number | null;
+}): Promise<number> {
+  const rows = readMeta();
+  const id = rows.length === 0 ? 1 : Math.max(...rows.map((r) => r.id)) + 1;
+  const now = new Date();
+  const doc: KnowledgeDoc = {
+    id,
+    fileName: data.fileName,
+    fileType: data.fileType,
+    fileSize: data.fileSize,
+    s3Url: data.s3Url,
+    s3Key: data.s3Key,
+    extractedText: data.extractedText,
+    uploadedBy: data.uploadedBy,
+    uploadedAt: now,
+    updatedAt: now,
+  };
+  rows.push(toStored(doc));
+  writeMeta(rows);
+  return id;
 }
 
-// ===== Knowledge Docs =====
-
-export async function listKnowledgeDocs() {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select({
-    id: knowledgeDocs.id,
-    fileName: knowledgeDocs.fileName,
-    fileType: knowledgeDocs.fileType,
-    fileSize: knowledgeDocs.fileSize,
-    s3Url: knowledgeDocs.s3Url,
-    s3Key: knowledgeDocs.s3Key,
-    uploadedBy: knowledgeDocs.uploadedBy,
-    uploadedAt: knowledgeDocs.uploadedAt,
-    // Omit extractedText from list for performance
-  }).from(knowledgeDocs).orderBy(desc(knowledgeDocs.uploadedAt));
+export async function deleteKnowledgeDoc(id: number): Promise<void> {
+  const rows = readMeta();
+  const next = rows.filter((r) => r.id !== id);
+  if (next.length === rows.length) return;
+  writeMeta(next);
 }
 
-export async function createKnowledgeDoc(data: InsertKnowledgeDoc) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  const result = await db.insert(knowledgeDocs).values(data);
-  return result[0].insertId;
+export async function getKnowledgeDocById(id: number): Promise<KnowledgeDoc | null> {
+  const rows = readMeta();
+  const row = rows.find((r) => r.id === id);
+  return row ? toDoc(row) : null;
 }
 
-export async function deleteKnowledgeDoc(id: number) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  await db.delete(knowledgeDocs).where(eq(knowledgeDocs.id, id));
-}
-
-export async function getKnowledgeDocById(id: number) {
-  const db = await getDb();
-  if (!db) return null;
-  const result = await db.select().from(knowledgeDocs).where(eq(knowledgeDocs.id, id)).limit(1);
-  return result[0] ?? null;
-}
-
-/** Returns concatenated extracted text from all docs (capped at 8000 chars) for LLM context */
+/** Returns concatenated extracted text from recent docs (capped at maxChars) for LLM context. */
 export async function getKnowledgeContext(maxChars = 8000): Promise<string> {
-  const db = await getDb();
-  if (!db) return "";
-  const docs = await db.select({
-    fileName: knowledgeDocs.fileName,
-    extractedText: knowledgeDocs.extractedText,
-    uploadedAt: knowledgeDocs.uploadedAt,
-  }).from(knowledgeDocs).orderBy(desc(knowledgeDocs.uploadedAt)).limit(10);
+  const rows = readMeta();
+  const sorted = [...rows].sort(
+    (a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime(),
+  );
+  const recent = sorted.slice(0, 10);
 
-  if (docs.length === 0) return "";
+  if (recent.length === 0) return "";
 
   let context = "=== ScaleBox 产品知识库 ===\n";
   let remaining = maxChars;
-  for (const doc of docs) {
-    if (!doc.extractedText || remaining <= 0) break;
-    const header = `\n--- ${doc.fileName} (${doc.uploadedAt.toLocaleDateString("zh-CN")}) ---\n`;
-    const text = doc.extractedText.slice(0, remaining);
+  for (const row of recent) {
+    if (!row.extractedText || remaining <= 0) break;
+    const header = `\n--- ${row.fileName} (${new Date(row.uploadedAt).toLocaleDateString("zh-CN")}) ---\n`;
+    const text = row.extractedText.slice(0, remaining);
     context += header + text;
     remaining -= text.length + header.length;
   }

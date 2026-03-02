@@ -1,10 +1,15 @@
+/**
+ * Server environment variables.
+ * No Manus/Forge: use generic API URL/KEY for LLM, optional for voice/image.
+ */
 export const ENV = {
-  appId: process.env.VITE_APP_ID ?? "",
-  cookieSecret: process.env.JWT_SECRET ?? "",
-  databaseUrl: process.env.DATABASE_URL ?? "",
-  oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",
-  ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
   isProduction: process.env.NODE_ENV === "production",
-  forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
-  forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
+  llmApiUrl: process.env.LLM_API_URL ?? "",
+  llmApiKey: process.env.LLM_API_KEY ?? "",
+  voiceApiUrl: process.env.VOICE_API_URL ?? "",
+  voiceApiKey: process.env.VOICE_API_KEY ?? "",
+  imageApiUrl: process.env.IMAGE_API_URL ?? "",
+  imageApiKey: process.env.IMAGE_API_KEY ?? "",
+  dataApiUrl: process.env.DATA_API_URL ?? "",
+  dataApiKey: process.env.DATA_API_KEY ?? "",
 };

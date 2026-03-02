@@ -3,7 +3,11 @@ import { httpBatchLink } from "@trpc/client";
 import superjson from "superjson";
 import type { AppRouter } from "@/server/routers";
 import { getApiBaseUrl } from "@/constants/oauth";
-import * as Auth from "@/lib/_core/auth";
+import {
+  getStoredLlmKey,
+  getStoredLlmProvider,
+  getStoredLlmUrl,
+} from "@/lib/_core/llm-config";
 
 /**
  * tRPC React client for type-safe API calls.
@@ -26,15 +30,19 @@ export function createTRPCClient() {
         // tRPC v11: transformer MUST be inside httpBatchLink, not at root
         transformer: superjson,
         async headers() {
-          const token = await Auth.getSessionToken();
-          return token ? { Authorization: `Bearer ${token}` } : {};
+          const [key, url, provider] = await Promise.all([
+            getStoredLlmKey(),
+            getStoredLlmUrl(),
+            getStoredLlmProvider(),
+          ]);
+          const h: Record<string, string> = {};
+          if (key?.trim()) h["X-LLM-API-Key"] = key.trim();
+          if (url?.trim()) h["X-LLM-API-URL"] = url.trim();
+          h["X-LLM-Provider"] = provider;
+          return h;
         },
-        // Custom fetch to include credentials for cookie-based auth
         fetch(url, options) {
-          return fetch(url, {
-            ...options,
-            credentials: "include",
-          });
+          return fetch(url, { ...options, credentials: "include" });
         },
       }),
     ],
